@@ -1,0 +1,85 @@
+# Локальная конфигурация Supabase для Construction CRM.
+# Формат соответствует Supabase CLI 3.x. Облачный проект настраивается отдельно в Dashboard
+# (см. docs/SECURITY.md, будет на Этапе 10): эти значения там автоматически не применяются.
+project_id = "construction-crm"
+
+[api]
+enabled = true
+port = 54321
+# Только public. Схема private (хелперы RLS) наружу через REST не публикуется.
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+# G6: чат работает через polling TanStack Query, Realtime не нужен.
+[realtime]
+enabled = false
+
+# Файлы в MVP не используются.
+[storage]
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+
+# Локальная почта: сюда приходят письма-приглашения и сброс пароля (http://127.0.0.1:54324).
+[local_smtp]
+enabled = true
+port = 54324
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# ТЗ 12.1: публичная регистрация отключена. Приглашения через Admin API (Edge Function) работают.
+enable_signup = false
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 8
+password_requirements = "lower_upper_letters_digits"
+
+[auth.email]
+enabled = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = true
+max_frequency = "60s"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.sms]
+enabled = false
+
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false

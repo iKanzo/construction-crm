@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.local
+.DS_Store
+backend/supabase/.branches
+backend/supabase/.temp
+backend/supabase/functions/.env
+playwright-report
+test-results
+storybook-static

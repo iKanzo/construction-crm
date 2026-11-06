@@ -1,0 +1,14 @@
+.form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid #d4d9df;
+  border-radius: 0.5rem;
+  background: var(--surface, #fff);
+}
+
+.form h2 { margin: 0; }
+.field { display: grid; gap: 0.35rem; }
+.field input, .field textarea, .field select { width: 100%; }
+.error { margin: 0; color: #a21b1b; }
+.actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
