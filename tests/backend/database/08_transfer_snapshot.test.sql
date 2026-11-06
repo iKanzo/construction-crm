@@ -1,6 +1,6 @@
 -- G15: снимок предложения и независимые основания доступа получателя.
 begin;
-select plan(26);
+select plan(28);
 
 insert into auth.users (id, email) values
   ('d0000000-0000-4000-8000-000000000001', 'snapshot-admin@x.test'),
@@ -62,17 +62,19 @@ select is(pg_temp.act(null, $$update public.transfers set task_title_snapshot = 
   'ERR:23001', 'снимок нельзя изменить даже привилегированным UPDATE');
 select is((select task_title_snapshot from public.transfers where id = current_setting('test.snapshot_transfer')::uuid), 'Исходное название', 'отклонённое изменение не портит снимок');
 
--- Другая ответственность открывает объект и задачу, но не чужой чат.
+-- Другая ответственность открывает объект, но не полную чужую задачу или чат.
 update public.tasks set responsible_manager_id = 'd0000000-0000-4000-8000-000000000003' where id = 'd2000000-0000-4000-8000-000000000002';
 select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.objects where id = 'd1000000-0000-4000-8000-000000000001'$$), '1', 'независимая ответственность открывает объект');
-select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.tasks where id = 'd2000000-0000-4000-8000-000000000001'$$), '1', 'независимая ответственность открывает задачу');
+select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.tasks where id = 'd2000000-0000-4000-8000-000000000001'$$), '0', 'независимая ответственность не открывает полную чужую задачу');
 select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.comments where task_id = 'd2000000-0000-4000-8000-000000000001'$$), '0', 'чужой чат по-прежнему закрыт');
+select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select title from public.get_object_task_summaries('d1000000-0000-4000-8000-000000000001') where id = 'd2000000-0000-4000-8000-000000000001'$$), 'Новое название', 'независимый доступ к объекту сохраняет краткие данные задачи до принятия');
+select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.task_history where task_id = 'd2000000-0000-4000-8000-000000000001'$$), '0', 'независимый доступ к объекту не открывает историю предложенной задачи');
 update public.tasks set responsible_manager_id = 'd0000000-0000-4000-8000-000000000002' where id = 'd2000000-0000-4000-8000-000000000002';
 select is(pg_temp.act('d0000000-0000-4000-8000-000000000003',
   $$select public.respond_to_transfer(current_setting('test.snapshot_transfer')::uuid, true)$$), '', 'получатель принимает передачу');
 select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select title from public.tasks where id = 'd2000000-0000-4000-8000-000000000001'$$), 'Новое название', 'после принятия доступно актуальное название');
 select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select task_title_snapshot from public.transfers where id = current_setting('test.snapshot_transfer')::uuid$$), 'Исходное название', 'после принятия сохраняется прежний снимок');
-select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.tasks where id in ('d2000000-0000-4000-8000-000000000001', 'd2000000-0000-4000-8000-000000000002')$$), '2', 'после принятия видны все задачи объекта');
+select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.tasks where id in ('d2000000-0000-4000-8000-000000000001', 'd2000000-0000-4000-8000-000000000002')$$), '1', 'после принятия полная строка доступна только для переданной задачи');
 select is(pg_temp.act('d0000000-0000-4000-8000-000000000003', $$select count(*)::text from public.comments where task_id = 'd2000000-0000-4000-8000-000000000002'$$), '0', 'после принятия чужой чат закрыт');
 
 select set_config('test.executor_transfer', pg_temp.act('d0000000-0000-4000-8000-000000000001',

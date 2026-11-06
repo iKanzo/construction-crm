@@ -1,10 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { MyTasksPage } from '@/pages/my-tasks';
-import { ObjectsPage } from '@/pages/objects';
-import { ProfilePage } from '@/pages/profile';
-import { TransfersPage } from '@/pages/transfers';
-import { UsersPage } from '@/pages/users';
+import { PageStub } from '@/shared/ui/page-stub/PageStub';
 import { ROUTES } from '@/shared/config';
 import { RootLayout } from './RootLayout';
 
@@ -22,11 +18,11 @@ function LayoutExample({ initialPath }: { initialPath: string }) {
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route element={<RootLayout />}>
-          <Route path={ROUTES.objects} element={<ObjectsPage />} />
-          <Route path={ROUTES.myTasks} element={<MyTasksPage />} />
-          <Route path={ROUTES.transfers} element={<TransfersPage />} />
-          <Route path={ROUTES.users} element={<UsersPage />} />
-          <Route path={ROUTES.profile} element={<ProfilePage />} />
+          <Route path={ROUTES.objects} element={<PageStub title="Объекты" />} />
+          <Route path={ROUTES.myTasks} element={<PageStub title="Мои задачи" />} />
+          <Route path={ROUTES.transfers} element={<PageStub title="Передачи" />} />
+          <Route path={ROUTES.users} element={<PageStub title="Сотрудники" />} />
+          <Route path={ROUTES.profile} element={<PageStub title="Профиль" />} />
         </Route>
       </Routes>
     </MemoryRouter>

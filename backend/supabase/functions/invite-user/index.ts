@@ -36,7 +36,9 @@ Deno.serve(async (req: Request) => {
       (role !== 'manager' && role !== 'executor')) return reply(400, { error: 'invalid_input' });
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email.trim().toLowerCase());
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(email.trim().toLowerCase(), {
+    data: { password_setup_required: true },
+  });
   if (error || !data.user) return reply(400, { error: 'invitation_failed' });
   const { error: insertError } = await admin.from('profiles').insert({ id: data.user.id, full_name: full_name.trim(), role });
   if (insertError) {

@@ -1,6 +1,6 @@
 -- Регрессионные проверки критичных бизнес-операций RPC.
 begin;
-select plan(26);
+select plan(25);
 
 insert into auth.users (id, email) values
   ('c0000000-0000-4000-8000-000000000001', 'rpc-manager@x.test'),
@@ -107,7 +107,7 @@ select ok(not exists (
   select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname in ('create_object','update_object','delete_object',
     'create_task','assign_executor','decline_assignment','update_task','transition_task',
-    'create_transfer','respond_to_transfer','cancel_transfer','deactivate_user','add_comment','get_task_object_title')
+    'create_transfer','respond_to_transfer','cancel_transfer','deactivate_user','add_comment','get_task_object_title','get_object_task_summaries')
     and (not has_function_privilege('authenticated', p.oid, 'EXECUTE')
       or has_function_privilege('anon', p.oid, 'EXECUTE')
       or exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0))

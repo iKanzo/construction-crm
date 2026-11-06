@@ -5,10 +5,59 @@ import { buttonAction, date, events, label, Loading, Notice, useAction, useRows,
 import { TaskForm, TransferForm } from '@/widgets/crm-forms';
 
 export function TaskDetailsPage({ profile }: { profile: Profile }) {
-  const { taskId } = useParams(); const tasks = useRows<Task>('tasks', 'id', taskId, !!taskId); const task = tasks.data?.[0]; const profiles = useRows<Profile>('profiles'); const objects = useRows<ObjectRow>('objects', 'id', task?.object_id, !!task?.object_id); const history = useRows<History>('task_history', 'task_id', taskId, !!taskId); const canChat = !!task && (profile.role === 'admin' || task.responsible_manager_id === profile.id || task.assigned_to === profile.id); const comments = useRows<Comment>('comments', 'task_id', taskId, !!taskId && canChat, true); const action = useAction(); const [edit, setEdit] = useState(false); const [revision, setRevision] = useState(false); const [transfer, setTransfer] = useState(false);
+  const { taskId } = useParams();
+  const tasks = useRows<Task>('tasks', 'id', taskId, !!taskId, true);
+  const task = tasks.data?.[0];
+  const manager = profile.role === 'manager' && task?.responsible_manager_id === profile.id;
+  const executor = profile.role === 'executor' && task?.assigned_to === profile.id;
+  const accessible = !!task && !tasks.error && (profile.role === 'admin' || manager || executor);
+  const profiles = useRows<Profile>('profiles', undefined, undefined, accessible);
+  const objects = useRows<ObjectRow>('objects', 'id', task?.object_id, accessible);
+  const history = useRows<History>('task_history', 'task_id', taskId, accessible, true);
+  const comments = useRows<Comment>('comments', 'task_id', taskId, accessible, true);
+  const action = useAction();
+  const [edit, setEdit] = useState(false);
+  const [revision, setRevision] = useState(false);
+  const [transfer, setTransfer] = useState(false);
   if (tasks.isLoading || tasks.error) return <Loading loading={tasks.isLoading} error={tasks.error} />;
-  if (!task) return <p>Задача не найдена или недоступна.</p>;
-  const manager = profile.role === 'manager' && task.responsible_manager_id === profile.id; const executor = profile.role === 'executor' && task.assigned_to === profile.id; const name = (id: string | null) => profiles.data?.find(p => p.id === id)?.full_name || 'Не назначен';
+  if (!task || !accessible) return <p>Задача не найдена или недоступна.</p>;
+  const canEdit = manager && ((task.status === 'new' && !task.assigned_to) || task.status === 'revision');
+  const canTransfer = profile.role === 'admin' && !['accepted', 'closed'].includes(task.status);
+  const name = (id: string | null) => profiles.data?.find(p => p.id === id)?.full_name || id || 'Не назначен';
   const transition = (status: string, comment: string | null = null) => void action.run(() => rpc('transition_task', { p_task_id: task.id, p_new_status: status, p_comment: comment }), () => setRevision(false));
-  return <><Link to="/my-tasks">← Задачи</Link><div className="heading"><div><h1>{task.title}</h1><span className="badge">{label(task.status)}</span></div></div><section className="panel"><p>{task.description || 'Описание не указано'}</p><p>Объект: {objects.data?.[0] ? <Link to={`/objects/${task.object_id}`}>{objects.data[0].title}</Link> : 'недоступен'}</p><p>Менеджер: {name(task.responsible_manager_id)} · Исполнитель: {name(task.assigned_to)}</p><Loading loading={objects.isLoading} error={objects.error || profiles.error} /><div className="actions">{manager && ((task.status === 'new' && !task.assigned_to) || task.status === 'revision') && buttonAction('Изменить', () => setEdit(!edit))}{executor && ['new', 'revision'].includes(task.status) && buttonAction('Взять в работу', () => transition('in_progress'), action.busy)}{executor && task.status === 'new' && buttonAction('Отказаться от назначения', () => { if (window.confirm('Отказаться от назначения?')) void action.run(() => rpc('decline_assignment', { p_task_id: task.id })); }, action.busy)}{executor && task.status === 'in_progress' && buttonAction('Отправить на проверку', () => transition('under_review'), action.busy)}{manager && task.status === 'under_review' && <>{buttonAction('Принять', () => transition('accepted'), action.busy)}{buttonAction('На доработку', () => setRevision(!revision), action.busy)}</>}{manager && task.status === 'new' && !task.assigned_to && buttonAction('Закрыть', () => { if (window.confirm('Закрыть задачу?')) transition('closed'); }, action.busy)}{profile.role === 'admin' && !['accepted', 'closed'].includes(task.status) && buttonAction('Предложить передачу', () => setTransfer(!transfer))}</div><Notice error={action.error} /></section>{edit && <TaskForm task={task} done={() => setEdit(false)} />}{revision && <form className="panel" onSubmit={e => { e.preventDefault(); transition('revision', value(new FormData(e.currentTarget), 'comment')); }}><label>Комментарий для доработки<textarea name="comment" required maxLength={5000} /></label><button disabled={action.busy}>Отправить на доработку</button></form>}{manager && task.status === 'new' && !task.assigned_to && <form className="panel" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); void action.run(() => rpc('assign_executor', { p_task_id: task.id, p_executor_id: value(f, 'executor') })); }}><label>Назначить исполнителя<select name="executor" required defaultValue=""><option value="" disabled>Выберите сотрудника</option>{profiles.data?.filter(p => p.role === 'executor' && p.is_active).map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select></label><button disabled={action.busy}>Назначить</button></form>}{transfer && <TransferForm task={task} profiles={profiles.data || []} done={() => setTransfer(false)} />}<section className="panel"><h2>История</h2><Loading loading={history.isLoading} error={history.error} />{history.data?.slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).map(h => <div className="entry" key={h.id}><strong>{events[h.event_type] || h.event_type}</strong> · {h.actor_name}<small>{date(h.created_at)}{h.old_status && h.new_status ? ` · ${label(h.old_status)} → ${label(h.new_status)}` : ''}</small>{Object.keys(h.details).length > 0 && <details><summary>Детали</summary><pre>{JSON.stringify(h.details, null, 2)}</pre></details>}</div>)}</section>{canChat && <section className="panel"><h2>Чат</h2><Loading loading={comments.isLoading} error={comments.error} />{comments.data?.slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).map(c => <div className="entry" key={c.id}><strong>{c.author_name}</strong><small>{date(c.created_at)}</small><p>{c.content}</p></div>)}<form onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const text = value(new FormData(form), 'content'); if (text) void action.run(() => rpc('add_comment', { p_task_id: task.id, p_content: text }), () => form.reset()); }}><label>Сообщение<textarea name="content" required maxLength={5000} /></label><Notice error={action.error} /><button disabled={action.busy}>Отправить</button></form></section>}</>;
+  return <>
+    <Link to="/my-tasks">← Задачи</Link>
+    <div className="heading"><div><h1>{task.title}</h1><span className="badge">{label(task.status)}</span></div></div>
+    <section className="panel">
+      <p>{task.description || 'Описание не указано'}</p>
+      <p>Объект: {objects.data?.[0] ? <Link to={`/objects/${task.object_id}`}>{objects.data[0].title}</Link> : 'недоступен'}</p>
+      <p>Менеджер: {name(task.responsible_manager_id)} · Исполнитель: {name(task.assigned_to)}</p>
+      <Loading loading={objects.isLoading} error={objects.error || profiles.error} />
+      <div className="actions">
+        {canEdit && buttonAction('Изменить', () => setEdit(!edit))}
+        {executor && ['new', 'revision'].includes(task.status) && buttonAction('Взять в работу', () => transition('in_progress'), action.busy)}
+        {executor && task.status === 'new' && buttonAction('Отказаться от назначения', () => { if (window.confirm('Отказаться от назначения?')) void action.run(() => rpc('decline_assignment', { p_task_id: task.id })); }, action.busy)}
+        {executor && task.status === 'in_progress' && buttonAction('Отправить на проверку', () => transition('under_review'), action.busy)}
+        {manager && task.status === 'under_review' && <>{buttonAction('Принять', () => transition('accepted'), action.busy)}{buttonAction('На доработку', () => setRevision(!revision), action.busy)}</>}
+        {manager && task.status === 'new' && !task.assigned_to && buttonAction('Закрыть', () => { if (window.confirm('Закрыть задачу?')) transition('closed'); }, action.busy)}
+        {canTransfer && buttonAction('Предложить передачу', () => setTransfer(!transfer))}
+      </div>
+      <Notice error={action.error} />
+    </section>
+    {edit && canEdit && <TaskForm task={task} done={() => setEdit(false)} />}
+    {revision && manager && task.status === 'under_review' && <form className="panel" onSubmit={e => {
+      e.preventDefault(); const comment = value(new FormData(e.currentTarget), 'comment');
+      if (comment) transition('revision', comment);
+    }}><label>Комментарий для доработки<textarea name="comment" required maxLength={5000} /></label><button disabled={action.busy}>Отправить на доработку</button></form>}
+    {manager && task.status === 'new' && !task.assigned_to && <form className="panel" onSubmit={e => {
+      e.preventDefault(); const f = new FormData(e.currentTarget);
+      void action.run(() => rpc('assign_executor', { p_task_id: task.id, p_executor_id: value(f, 'executor') }));
+    }}><label>Назначить исполнителя<select name="executor" required defaultValue=""><option value="" disabled>Выберите сотрудника</option>{profiles.data?.filter(p => p.role === 'executor' && p.is_active).map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select></label><button disabled={action.busy || profiles.isLoading || !!profiles.error}>Назначить</button></form>}
+    {transfer && canTransfer && <TransferForm task={task} profiles={profiles.data || []} done={() => setTransfer(false)} />}
+    <section className="panel"><h2>История</h2><Loading loading={history.isLoading} error={history.error} />{!history.error && history.data?.slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).map(h => <div className="entry" key={h.id}><strong>{events[h.event_type] || h.event_type}</strong> · {h.actor_name}<small>{date(h.created_at)}{h.old_status && h.new_status ? ` · ${label(h.old_status)} → ${label(h.new_status)}` : ''}</small>{Object.keys(h.details).length > 0 && <details><summary>Детали</summary><pre>{JSON.stringify(h.details, null, 2)}</pre></details>}</div>)}</section>
+    <section className="panel"><h2>Чат</h2><Loading loading={comments.isLoading} error={comments.error} />{!comments.error && comments.data?.slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).map(c => <div className="entry" key={c.id}><strong>{c.author_name}</strong><small>{date(c.created_at)}</small><p>{c.content}</p></div>)}<form onSubmit={e => {
+      e.preventDefault(); const form = e.currentTarget; const text = value(new FormData(form), 'content');
+      if (text) void action.run(() => rpc('add_comment', { p_task_id: task.id, p_content: text }), () => form.reset());
+    }}><label>Сообщение<textarea name="content" required maxLength={5000} /></label><button disabled={action.busy}>Отправить</button></form></section>
+  </>;
 }

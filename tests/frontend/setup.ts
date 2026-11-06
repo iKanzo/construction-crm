@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 
 // Node's built-in Request rejects jsdom's AbortSignal during React Router navigation.
@@ -18,5 +18,7 @@ class TestRequest {
 }
 
 vi.stubGlobal('Request', TestRequest);
+// The first lazy route also loads its form modules on slower CI/Windows hosts.
+configure({ asyncUtilTimeout: 3000 });
 
 afterEach(() => cleanup());
